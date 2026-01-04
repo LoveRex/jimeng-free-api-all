@@ -8,13 +8,23 @@
 
 > **本项目基于 [LLM-Red-Team/jimeng-free-api](https://github.com/LLM-Red-Team/jimeng-free-api) 二次开发，感谢原作者的贡献！**
 >
-> **请有项目交流需求的朋友 email 获取入群 QR，zinanzhi@gmail.com**
+> **请有项目交流需求的朋友 email 获取入群 QR，<zinanzhi@gmail.com>**
 
 </div>
 
 ---
 
-## 📖 项目简介
+## � 更新日志
+
+### 2026-01-04
+
+- 🐛 **修复积分不足误报**：适配即梦官方 API 错误码变更（`5000` → `1006`），现在能正确识别积分不足并自动降级到 1K 分辨率重试
+- 🐛 **修复图像自动降级**：Chat 接口启用 `generateImagesWithRetry`，支持 2K→1K 自动降级
+- 🐛 **修复视频生成崩溃**：修复多模态消息（图片+文本）导致的 `content.substring is not a function` 错误
+
+---
+
+## �📖 项目简介
 
 **Jimeng AI Free** 是一个强大的即梦（Jimeng）AI 接口服务，旨在提供便捷的图像和视频生成能力。
 

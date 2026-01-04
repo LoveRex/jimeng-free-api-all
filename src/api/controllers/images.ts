@@ -61,7 +61,7 @@ function detectAspectRatioKey(prompt: string): string | null {
   // 正则匹配比例格式 (支持中英文冒号)
   const ratioRegex = /(\d+)\s*[:：]\s*(\d+)/g;
   const matches = [...prompt.matchAll(ratioRegex)];
-  
+
   for (const match of matches) {
     const key = `${match[1]}:${match[2]}`;
     if (ASPECT_RATIOS.includes(key)) {
@@ -69,7 +69,7 @@ function detectAspectRatioKey(prompt: string): string | null {
       return key;
     }
   }
-  
+
   // 支持中文关键词
   if (/横屏|横版|宽屏/.test(prompt)) {
     logger.info(`从提示词中检测到横屏关键词，使用 16:9`);
@@ -83,7 +83,7 @@ function detectAspectRatioKey(prompt: string): string | null {
     logger.info(`从提示词中检测到方形关键词，使用 1:1`);
     return "1:1";
   }
-  
+
   return null;
 }
 
@@ -112,12 +112,12 @@ export async function generateImages(
   // 检查是否有参考图
   const hasFilePath = !!filePath;
   let uploadID: string | null = null;
-  
+
   // 如果有参考图，先上传
   if (hasFilePath) {
     // 只显示类型信息，不显示完整的base64内容
-    const fileDesc = filePath.startsWith('data:') 
-      ? `base64图片(${filePath.length}字符)` 
+    const fileDesc = filePath.startsWith('data:')
+      ? `base64图片(${filePath.length}字符)`
       : filePath.substring(0, 80);
     logger.info(`检测到参考图: ${fileDesc}，切换到混合模式`);
     try {
@@ -129,22 +129,22 @@ export async function generateImages(
       throw new APIException(EX.API_REQUEST_FAILED, `参考图上传失败: ${error.message}`);
     }
   }
-  
+
   // 有参考图时使用混合模型
   const modelName = hasFilePath ? DEFAULT_BLEND_MODEL : _model;
   const model = getModel(modelName);
-  
+
   // 解析分辨率和比例
   const is4xModel = modelName.includes('image-4.') || modelName === 'jimeng-image-4.5' || modelName === 'jimeng-image-4.1' || modelName === 'jimeng-image-4.0';
   let resolutionType = resolution; // 用户指定优先
-  
+
   // 如果未指定或不明确，根据模型默认
   if (!['1k', '2k'].includes(resolutionType)) {
     resolutionType = is4xModel ? '2k' : '1k';
   }
 
   const dimensionMap = resolutionType === '2k' ? DIMENSIONS_2K : DIMENSIONS_1K;
-  
+
   // 从提示词中检测比例
   const detectedRatioKey = detectAspectRatioKey(prompt);
   // 如果用户传了 valid ratio (in map) 则使用，否则使用 detector 或默认 1:1
@@ -155,24 +155,24 @@ export async function generateImages(
   // 假设：如果 ratio 是 "custom" (API gateways sometimes send "custom"), treat as unset.
   // 这里简化：如果 ratio 参数在 RATIO_VALUES 中且不是 detect 出来的（这里无法区分），直接用。
   // 妥协：优先使用 ratio 参数，除非 ratio 是 "custom" 或者空。
-  
+
   let validRatio = ratio;
   if (!RATIO_VALUES.hasOwnProperty(validRatio)) {
-      validRatio = "1:1";
+    validRatio = "1:1";
   }
-  
+
   // 如果 prompt 里检测到且 ratio 是默认 "1:1" (可能是未传)，则覆盖。
   // 这里的风险是用户真的想 1:1 但 prompt 里有 "16:9"。
   // 鉴于这是一个 "Chat" driven API often，prompt detection is feature.
   if (detectedRatioKey && validRatio === "1:1") {
-      validRatio = detectedRatioKey;
+    validRatio = detectedRatioKey;
   }
-  
+
   const imageRatio = RATIO_VALUES[validRatio];
   const dimensions = dimensionMap[validRatio];
   const finalWidth = dimensions.width;
   const finalHeight = dimensions.height;
-  
+
   logger.info(`使用模型: ${modelName} 映射模型: ${model} ${finalWidth}x${finalHeight} (${validRatio}) 精细度: ${sampleStrength} 分辨率: ${resolutionType} 模式: ${hasFilePath ? '混合' : '生成'}`);
 
   const { totalCredit } = await getCredit(refreshToken);
@@ -180,10 +180,10 @@ export async function generateImages(
     await receiveCredit(refreshToken);
 
   const componentId = util.uuid();
-  
+
   // 构建 abilities 对象
   let abilities: Record<string, any>;
-  
+
   if (hasFilePath && uploadID) {
     // 混合模式 abilities
     abilities = {
@@ -281,7 +281,7 @@ export async function generateImages(
       },
     };
   }
-  
+
   const { aigc_data } = await request(
     "post",
     "/mweb/v1/aigc_draft/generate",
@@ -341,7 +341,7 @@ export async function generateImages(
   const historyId = aigc_data.history_record_id;
   if (!historyId)
     throw new APIException(EX.API_IMAGE_GENERATION_FAILED, "记录ID不存在");
-  
+
   // 状态码说明：
   // 20 = 初始提交/队列中
   // 42 = 处理中（jimeng-4.5 新状态）
@@ -351,11 +351,11 @@ export async function generateImages(
   // 30 = 生成失败
   const PROCESSING_STATES = [20, 42, 45];
   const FAIL_STATE = 30;
-  
+
   let status = 20, failCode, item_list = [];
   let retryCount = 0;
   const MAX_POLL_RETRIES = 120; // 最多轮询120次
-  
+
   while (PROCESSING_STATES.includes(status) && (!item_list || item_list.length === 0) && retryCount < MAX_POLL_RETRIES) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     retryCount++;
@@ -465,11 +465,11 @@ export async function generateImages(
     item_list = result[historyId].item_list;
     logger.info(`轮询状态: status=${status}, item_list长度=${item_list?.length || 0}, 第${retryCount}次`);
   }
-  
+
   if (retryCount >= MAX_POLL_RETRIES) {
     throw new APIException(EX.API_IMAGE_GENERATION_FAILED, "图像生成超时");
   }
-  
+
   if (status === FAIL_STATE) {
     if (failCode === '2038')
       throw new APIException(EX.API_CONTENT_FILTERED);
@@ -477,7 +477,7 @@ export async function generateImages(
       throw new APIException(EX.API_IMAGE_GENERATION_FAILED);
   }
   return item_list.map((item) => {
-    if(!item?.image?.large_images?.[0]?.image_url)
+    if (!item?.image?.large_images?.[0]?.image_url)
       return item?.common_attr?.cover_url || null;
     return item.image.large_images[0].image_url;
   });
@@ -501,7 +501,7 @@ export async function generateImagesWithRetry(
 ): Promise<string[]> {
   const resolutionLevels = ['2k', '1k']; // 分辨率降级顺序
   let currentResIndex = Math.max(0, resolutionLevels.indexOf(options.resolution || '2k'));
-  
+
   while (currentResIndex < resolutionLevels.length) {
     try {
       const currentOptions = {
@@ -511,17 +511,17 @@ export async function generateImagesWithRetry(
       logger.info(`尝试生成图像，分辨率: ${currentOptions.resolution}`);
       return await generateImages(_model, prompt, currentOptions, refreshToken);
     } catch (error) {
-      // 检查是否为积分不足错误 (fail_code 2039 或包含积分不足关键词)
-      const isInsufficientCredits = 
+      // 检查是否为积分不足错误 (fail_code 2039/1006 或包含积分不足关键词)
+      const isInsufficientCredits =
         error.code === EX.API_IMAGE_GENERATION_INSUFFICIENT_POINTS[0] ||
-        (error.message && (error.message.includes('积分不足') || error.message.includes('2039')));
-      
+        (error.message && (error.message.includes('积分不足') || error.message.includes('2039') || error.message.includes('1006')));
+
       if (isInsufficientCredits && currentResIndex < resolutionLevels.length - 1) {
         currentResIndex++;
         logger.warn(`积分不足，自动降级到 ${resolutionLevels[currentResIndex]} 分辨率重试...`);
         continue;
       }
-      
+
       // 已是最低分辨率仍然失败
       if (isInsufficientCredits) {
         throw new APIException(
@@ -529,12 +529,12 @@ export async function generateImagesWithRetry(
           '积分不足，已自动降至最低画质仍然不足，请前往即梦官网 https://jimeng.jianying.com 充值积分'
         );
       }
-      
+
       // 其他错误直接抛出
       throw error;
     }
   }
-  
+
   throw new APIException(EX.API_IMAGE_GENERATION_FAILED, '图像生成失败');
 }
 

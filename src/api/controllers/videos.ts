@@ -499,7 +499,8 @@ export async function generateVideoWithRetry(
           error.code === EX.API_IMAGE_GENERATION_INSUFFICIENT_POINTS[0] ||
           (error.message &&
             (error.message.includes("积分不足") ||
-              error.message.includes("2039")));
+              error.message.includes("2039") ||
+              error.message.includes("1006")));
 
         if (!isInsufficientCredits) {
           // 其他错误直接抛出

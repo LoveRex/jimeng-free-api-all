@@ -117,7 +117,7 @@ export async function getCredit(refreshToken: string) {
  */
 export async function receiveCredit(refreshToken: string) {
   logger.info("正在收取今日积分...")
-  const { cur_total_credits, receive_quota  } = await request("POST", "/commerce/v1/benefits/credit_receive", refreshToken, {
+  const { cur_total_credits, receive_quota } = await request("POST", "/commerce/v1/benefits/credit_receive", refreshToken, {
     data: {
       time_zone: "Asia/Shanghai"
     },
@@ -148,7 +148,7 @@ export async function request(
   const sign = util.md5(
     `9e2c|${uri.slice(-7)}|${PLATFORM_CODE}|${VERSION_CODE}|${deviceTime}||11ac`
   );
-  
+
   const fullUrl = `https://jimeng.jianying.com${uri}`;
   const requestParams = {
     aid: DEFAULT_ASSISTANT_ID,
@@ -157,7 +157,7 @@ export async function request(
     webId: WEB_ID,
     ...(options.params || {}),
   };
-  
+
   const headers = {
     ...FAKE_HEADERS,
     Cookie: generateCookie(token),
@@ -166,16 +166,16 @@ export async function request(
     "Sign-Ver": "1",
     ...(options.headers || {}),
   };
-  
+
   logger.info(`发送请求: ${method.toUpperCase()} ${fullUrl}`);
   logger.info(`请求参数: ${JSON.stringify(requestParams)}`);
   logger.info(`请求数据: ${JSON.stringify(options.data || {})}`);
-  
+
   // 添加重试逻辑
   let retries = 0;
   const maxRetries = 3; // 最大重试次数
   let lastError = null;
-  
+
   while (retries <= maxRetries) {
     try {
       if (retries > 0) {
@@ -183,7 +183,7 @@ export async function request(
         // 重试前等待一段时间
         await new Promise(resolve => setTimeout(resolve, 1000 * retries));
       }
-      
+
       const response = await axios.request({
         method,
         url: fullUrl,
@@ -193,18 +193,18 @@ export async function request(
         validateStatus: () => true, // 允许任何状态码
         ..._.omit(options, "params", "headers"),
       });
-      
+
       // 记录响应状态和头信息
       logger.info(`响应状态: ${response.status} ${response.statusText}`);
-      
+
       // 流式响应直接返回response
       if (options.responseType == "stream") return response;
-      
+
       // 记录响应数据摘要
-      const responseDataSummary = JSON.stringify(response.data).substring(0, 500) + 
+      const responseDataSummary = JSON.stringify(response.data).substring(0, 500) +
         (JSON.stringify(response.data).length > 500 ? "..." : "");
       logger.info(`响应数据摘要: ${responseDataSummary}`);
-      
+
       // 检查HTTP状态码
       if (response.status >= 400) {
         logger.warn(`HTTP错误: ${response.status} ${response.statusText}`);
@@ -213,41 +213,41 @@ export async function request(
           continue;
         }
       }
-      
+
       return checkResult(response);
     }
     catch (error) {
       lastError = error;
       logger.error(`请求失败 (尝试 ${retries + 1}/${maxRetries + 1}): ${error.message}`);
-      
+
       // 如果是网络错误或超时，尝试重试
-      if ((error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || 
-           error.message.includes('timeout') || error.message.includes('network')) && 
-          retries < maxRetries) {
+      if ((error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' ||
+        error.message.includes('timeout') || error.message.includes('network')) &&
+        retries < maxRetries) {
         retries++;
         continue;
       }
-      
+
       // 其他错误直接抛出
       break;
     }
   }
-  
+
   // 所有重试都失败了，抛出最后一个错误
   logger.error(`请求失败，已重试 ${retries} 次: ${lastError.message}`);
   if (lastError.response) {
     logger.error(`响应状态: ${lastError.response.status}`);
     logger.error(`响应数据: ${JSON.stringify(lastError.response.data)}`);
   }
-   throw lastError;
- }
- 
- /**
-  * 预检查文件URL有效性
-  *
-  * @param fileUrl 文件URL
-  */
- export async function checkFileUrl(fileUrl: string) {
+  throw lastError;
+}
+
+/**
+ * 预检查文件URL有效性
+ *
+ * @param fileUrl 文件URL
+ */
+export async function checkFileUrl(fileUrl: string) {
   if (util.isBASE64Data(fileUrl)) return;
   const result = await axios.head(fileUrl, {
     timeout: 15000,
@@ -283,15 +283,15 @@ export async function uploadFile(
   isVideoImage: boolean = false
 ): Promise<{ image_uri: string; uri: string }> {
   // 只显示类型信息，不显示完整的base64内容
-  const fileDesc = fileUrl.startsWith('data:') 
-    ? `base64图片(${fileUrl.length}字符)` 
+  const fileDesc = fileUrl.startsWith('data:')
+    ? `base64图片(${fileUrl.length}字符)`
     : fileUrl.substring(0, 100);
   logger.info(`开始上传文件: ${fileDesc}`);
-  
+
   // 获取文件内容
   let fileData: Buffer;
   let filename: string;
-  
+
   if (util.isBASE64Data(fileUrl)) {
     // BASE64 数据
     const mimeType = util.extractBASE64DataFormat(fileUrl);
@@ -318,9 +318,9 @@ export async function uploadFile(
     filename = path.basename(fileUrl);
     fileData = fs.readFileSync(absolutePath);
   }
-  
+
   logger.info(`文件大小: ${fileData.length} bytes, 文件名: ${filename}`);
-  
+
   // 获取上传令牌
   const uploadAuth = await request(
     'POST',
@@ -328,19 +328,19 @@ export async function uploadFile(
     refreshToken,
     { data: { scene: 2 } }
   );
-  
+
   if (!uploadAuth || !uploadAuth.access_key_id) {
     throw new APIException(EX.API_REQUEST_FAILED, '获取上传凭证失败，账号可能已掉线');
   }
-  
+
   logger.info('获取上传令牌成功');
-  
+
   // 计算文件CRC32 - 注意：需要转换为无符号整数再转十六进制
   // crc-32 包返回有符号整数，需要 >>> 0 转换为无符号
   const crc32Value = util.crc32(fileData);
   const imageCrc32 = (crc32Value >>> 0).toString(16);
   logger.info(`文件CRC32: ${imageCrc32}`);
-  
+
   // 准备获取上传凭证的请求参数
   const getUploadImageProofRequestParams = {
     Action: 'ApplyImageUpload',
@@ -349,7 +349,7 @@ export async function uploadFile(
     Version: '2018-08-01',
     s: util.generateRandomString({ length: 11, charset: 'alphanumeric' }),
   };
-  
+
   // 生成AWS签名请求头
   const requestHeadersInfo = await generateAWSAuthorizationHeader(
     uploadAuth.access_key_id,
@@ -360,22 +360,22 @@ export async function uploadFile(
     'GET',
     getUploadImageProofRequestParams,
   );
-  
+
   // 获取图片上传凭证
   const uploadImgRes = await axios.get(
     'https://imagex.bytedanceapi.com/?' + new URLSearchParams(getUploadImageProofRequestParams as any).toString(),
     { headers: requestHeadersInfo, timeout: 30000 }
   );
-  
+
   if (uploadImgRes.data?.['Response ']?.hasOwnProperty('Error')) {
     throw new APIException(EX.API_REQUEST_FAILED, uploadImgRes.data['Response ']['Error']['Message']);
   }
-  
+
   const UploadAddress = uploadImgRes.data.Result.UploadAddress;
   const uploadImgUrl = `https://${UploadAddress.UploadHosts[0]}/upload/v1/${UploadAddress.StoreInfos[0].StoreUri}`;
-  
+
   logger.info(`上传图片到: ${uploadImgUrl}`);
-  
+
   // 上传图片
   const imageUploadRes = await axios.post(
     uploadImgUrl,
@@ -389,13 +389,13 @@ export async function uploadFile(
       timeout: 60000,
     }
   );
-  
+
   if (imageUploadRes.data.code !== 2000) {
     throw new APIException(EX.API_REQUEST_FAILED, imageUploadRes.data.message || '上传文件失败');
   }
-  
+
   logger.info('图片上传成功，提交上传');
-  
+
   // 提交上传
   const commitImgParams = {
     Action: 'CommitImageUpload',
@@ -403,11 +403,11 @@ export async function uploadFile(
     ServiceId: 'tb4s082cfz',
     Version: '2018-08-01',
   };
-  
+
   const commitImgContent = {
     SessionKey: UploadAddress.SessionKey,
   };
-  
+
   const commitImgHead = await generateAWSAuthorizationHeader(
     uploadAuth.access_key_id,
     uploadAuth.secret_access_key,
@@ -418,7 +418,7 @@ export async function uploadFile(
     commitImgParams,
     commitImgContent,
   );
-  
+
   const commitImg = await axios.post(
     'https://imagex.bytedanceapi.com/?' + new URLSearchParams(commitImgParams as any).toString(),
     commitImgContent,
@@ -430,14 +430,14 @@ export async function uploadFile(
       timeout: 30000,
     }
   );
-  
+
   if (commitImg.data?.['Response ']?.hasOwnProperty('Error')) {
     throw new APIException(EX.API_REQUEST_FAILED, commitImg.data['Response ']['Error']['Message']);
   }
-  
+
   const imageUri = commitImg.data.Result.Results[0].Uri;
   logger.info(`文件上传成功，URI: ${imageUri}`);
-  
+
   return {
     image_uri: imageUri,
     uri: imageUri,
@@ -458,42 +458,42 @@ async function generateAWSAuthorizationHeader(
   requestBody: any = {},
 ): Promise<Record<string, string>> {
   const crypto = await import('crypto');
-  
+
   // 获取当前ISO时间
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
   const amzDay = amzDate.substring(0, 8);
-  
+
   // 构建请求头
   const requestHeaders: Record<string, string> = {
     'X-Amz-Date': amzDate,
     'X-Amz-Security-Token': sessionToken,
   };
-  
+
   if (Object.keys(requestBody).length > 0) {
     requestHeaders['X-Amz-Content-Sha256'] = crypto
       .createHash('sha256')
       .update(JSON.stringify(requestBody))
       .digest('hex');
   }
-  
+
   // 生成签名
   const credentialString = `${amzDay}/${region}/${service}/aws4_request`;
-  
+
   const signedHeaders = Object.keys(requestHeaders)
     .map(k => k.toLowerCase())
     .sort()
     .join(';');
-  
+
   const canonicalHeaders = Object.keys(requestHeaders)
     .sort()
     .map(k => `${k.toLowerCase()}:${requestHeaders[k]}`)
     .join('\n') + '\n';
-  
+
   const bodyHash = Object.keys(requestBody).length > 0
     ? crypto.createHash('sha256').update(JSON.stringify(requestBody)).digest('hex')
     : crypto.createHash('sha256').update('').digest('hex');
-  
+
   const canonicalRequest = [
     requestMethod.toUpperCase(),
     '/',
@@ -502,24 +502,24 @@ async function generateAWSAuthorizationHeader(
     signedHeaders,
     bodyHash,
   ].join('\n');
-  
+
   const stringToSign = [
     'AWS4-HMAC-SHA256',
     amzDate,
     credentialString,
     crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
   ].join('\n');
-  
+
   // 生成签名密钥
   const kDate = crypto.createHmac('sha256', 'AWS4' + secretAccessKey).update(amzDay).digest();
   const kRegion = crypto.createHmac('sha256', kDate).update(region).digest();
   const kService = crypto.createHmac('sha256', kRegion).update(service).digest();
   const signingKey = crypto.createHmac('sha256', kService).update('aws4_request').digest();
-  
+
   const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
-  
+
   const authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyID}/${credentialString}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-  
+
   return {
     ...requestHeaders,
     'Authorization': authorization,
@@ -535,7 +535,8 @@ export function checkResult(result: AxiosResponse) {
   const { ret, errmsg, data } = result.data;
   if (!_.isFinite(Number(ret))) return result.data;
   if (ret === '0') return data;
-  if (ret === '5000')
+  // 即梦积分不足错误码：5000 (旧) 或 1006 (新)
+  if (ret === '5000' || ret === '1006')
     throw new APIException(EX.API_IMAGE_GENERATION_INSUFFICIENT_POINTS, `[无法生成图像]: 即梦积分可能不足，${errmsg}`);
   throw new APIException(EX.API_REQUEST_FAILED, `[请求jimeng失败]: ${errmsg}`);
 }
