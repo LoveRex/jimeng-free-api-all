@@ -535,10 +535,14 @@ export function checkResult(result: AxiosResponse) {
   const { ret, errmsg, data } = result.data;
   if (!_.isFinite(Number(ret))) return result.data;
   if (ret === '0') return data;
+  
+  // 记录详细的API错误信息
+  logger.error(`❌ [API错误] 错误码: ${ret}, 错误消息: ${errmsg}`);
+  
   // 即梦积分不足错误码：5000 (旧) 或 1006 (新)
   if (ret === '5000' || ret === '1006')
-    throw new APIException(EX.API_IMAGE_GENERATION_INSUFFICIENT_POINTS, `[无法生成图像]: 即梦积分可能不足，${errmsg}`);
-  throw new APIException(EX.API_REQUEST_FAILED, `[请求jimeng失败]: ${errmsg}`);
+    throw new APIException(EX.API_IMAGE_GENERATION_INSUFFICIENT_POINTS, `[积分不足]: ${errmsg} (错误码: ${ret})`);
+  throw new APIException(EX.API_REQUEST_FAILED, `[请求失败]: ${errmsg} (错误码: ${ret})`);
 }
 
 /**

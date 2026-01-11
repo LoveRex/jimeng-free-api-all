@@ -8,8 +8,8 @@ import logger from "@/lib/logger.ts";
 
 const DEFAULT_ASSISTANT_ID = 513695;
 export const DEFAULT_MODEL = "jimeng-image-4.5";
-const DEFAULT_BLEND_MODEL = "jimeng-image-3.0"; // 混合模式使用的模型
-const DRAFT_VERSION = "3.2.2";
+const DRAFT_VERSION = "3.3.8";
+const MIN_VERSION = "3.0.2";
 
 const MODEL_MAP = {
   "jimeng-image-4.5": "high_aes_general_v40l",
@@ -17,6 +17,7 @@ const MODEL_MAP = {
   "jimeng-image-4.0": "high_aes_general_v40",
   "jimeng-image-3.1": "high_aes_general_v30l_art_fangzhou:general_v3.0_18b",
   "jimeng-image-3.0": "high_aes_general_v30l:general_v3.0_18b",
+  "jimeng-image-2.0-pro": "high_aes_general_v20_L:general_v2.0_L",
 };
 
 // 即梦支持的图片比例映射
@@ -81,22 +82,22 @@ function detectAspectRatioKey(prompt: string): string | null {
   for (const match of matches) {
     const key = `${match[1]}:${match[2]}`;
     if (ASPECT_RATIOS.includes(key)) {
-      logger.info(`从提示词中检测到比例: ${key}`);
+      logger.info(`📐 [比例检测] 从提示词检测到比例: ${key}`);
       return key;
     }
   }
 
   // 支持中文关键词
   if (/横屏|横版|宽屏/.test(prompt)) {
-    logger.info(`从提示词中检测到横屏关键词，使用 16:9`);
+    logger.info(`📐 [比例检测] 检测到横屏关键词 → 16:9`);
     return "16:9";
   }
   if (/竖屏|竖版|手机/.test(prompt)) {
-    logger.info(`从提示词中检测到竖屏关键词，使用 9:16`);
+    logger.info(`📐 [比例检测] 检测到竖屏关键词 → 9:16`);
     return "9:16";
   }
   if (/方形|正方/.test(prompt)) {
-    logger.info(`从提示词中检测到方形关键词，使用 1:1`);
+    logger.info(`📐 [比例检测] 检测到方形关键词 → 1:1`);
     return "1:1";
   }
 
@@ -135,13 +136,13 @@ export async function generateImages(
     const fileDesc = filePath.startsWith("data:")
       ? `base64图片(${filePath.length}字符)`
       : filePath.substring(0, 80);
-    logger.info(`检测到参考图: ${fileDesc}，切换到混合模式`);
+    logger.info(`🖼️ [参考图] 检测到参考图: ${fileDesc} → 混合模式`);
     try {
       const uploadResult = await uploadFile(refreshToken, filePath);
       uploadID = uploadResult.image_uri;
-      logger.info(`参考图上传成功，URI: ${uploadID}`);
+      logger.info(`✅ [参考图] 上传成功 | URI: ${uploadID}`);
     } catch (error) {
-      logger.error(`参考图上传失败: ${error.message}`);
+      logger.error(`❌ [参考图] 上传失败: ${error.message}`);
       throw new APIException(
         EX.API_REQUEST_FAILED,
         `参考图上传失败: ${error.message}`
@@ -149,8 +150,8 @@ export async function generateImages(
     }
   }
 
-  // 有参考图时使用混合模型
-  const modelName = hasFilePath ? DEFAULT_BLEND_MODEL : _model;
+  // 使用用户选择的模型（混合模式不再强制3.0）
+  const modelName = _model;
   const model = getModel(modelName);
 
   // 解析分辨率和比例
@@ -159,10 +160,18 @@ export async function generateImages(
     modelName === "jimeng-image-4.5" ||
     modelName === "jimeng-image-4.1" ||
     modelName === "jimeng-image-4.0";
+  const is2xModel = modelName === "jimeng-image-2.0-pro";
+  
   let resolutionType = resolution; // 用户指定优先
 
-  // 如果未指定或不明确，根据模型默认
-  if (!["1k", "2k"].includes(resolutionType)) {
+  // 2.0pro 只支持 1k，强制覆盖
+  if (is2xModel) {
+    resolutionType = "1k";
+    if (resolution !== "1k") {
+      logger.warn(`⚠️ [分辨率] 2.0pro 只支持 1k，已自动调整`);
+    }
+  } else if (!["1k", "2k"].includes(resolutionType)) {
+    // 如果未指定或不明确，根据模型默认
     resolutionType = is4xModel ? "2k" : "1k";
   }
 
@@ -196,11 +205,13 @@ export async function generateImages(
   const finalWidth = dimensions.width;
   const finalHeight = dimensions.height;
 
-  logger.info(
-    `使用模型: ${modelName} 映射模型: ${model} ${finalWidth}x${finalHeight} (${validRatio}) 精细度: ${sampleStrength} 分辨率: ${resolutionType} 模式: ${
-      hasFilePath ? "混合" : "生成"
-    }`
-  );
+  logger.info(`\n🎨 ════════════════════ 图像生成任务 ════════════════════`);
+  logger.info(`   📦 模型: ${modelName}`);
+  logger.info(`   🔗 映射: ${model}`);
+  logger.info(`   📏 尺寸: ${finalWidth}x${finalHeight} (${validRatio})`);
+  logger.info(`   🔍 分辨率: ${resolutionType.toUpperCase()} | 精细度: ${sampleStrength}`);
+  logger.info(`   🎯 模式: ${hasFilePath ? "混合(参考图)" : "文生图"}`);
+  logger.info(`═══════════════════════════════════════════════════════════\n`);
 
   const { totalCredit } = await getCredit(refreshToken);
   if (totalCredit <= 0) await receiveCredit(refreshToken);
@@ -308,90 +319,87 @@ export async function generateImages(
     };
   }
 
+  const submitId = util.uuid();
+  
+  // 构建请求数据
+  const requestData = {
+    extend: {
+      root_model: model,
+    },
+    submit_id: submitId,
+    metrics_extra: hasFilePath
+      ? undefined
+      : JSON.stringify({
+          promptSource: "custom",
+          generateCount: 1,
+          enterFrom: "click",
+          sceneOptions: JSON.stringify([
+            {
+              type: "image",
+              scene: "ImageBasicGenerate",
+              modelReqKey: model,
+              resolutionType: resolutionType,
+              abilityList: [],
+              benefitCount: is4xModel && resolutionType === "2k" ? 4 : 1,
+              reportParams: {
+                enterSource: "generate",
+                vipSource: "generate",
+                extraVipFunctionKey: `${model}-${resolutionType}`,
+                useVipFunctionDetailsReporterHoc: true,
+              },
+            },
+          ]),
+          isBoxSelect: false,
+          isCutout: false,
+          generateId: submitId,
+          isRegenerate: false,
+        }),
+    draft_content: JSON.stringify({
+      type: "draft",
+      id: util.uuid(),
+      min_version: MIN_VERSION,
+      min_features: [],
+      is_from_tsn: true,
+      version: DRAFT_VERSION,
+      main_component_id: componentId,
+      component_list: [
+        {
+          type: "image_base_component",
+          id: componentId,
+          min_version: MIN_VERSION,
+          metadata: {
+            type: "",
+            id: util.uuid(),
+            created_platform: 3,
+            created_platform_version: "",
+            created_time_in_ms: String(Date.now()),
+            created_did: "",
+          },
+          generate_type: hasFilePath ? "blend" : "generate",
+          aigc_mode: "workbench",
+          abilities,
+        },
+      ],
+    }),
+    http_common_info: {
+      aid: Number(DEFAULT_ASSISTANT_ID),
+    },
+  };
+  
+  // 输出完整请求数据用于调试
+  logger.info(`📤 [请求数据] ${JSON.stringify(requestData)}`);
+
   const { aigc_data } = await request(
     "post",
     "/mweb/v1/aigc_draft/generate",
     refreshToken,
     {
       params: {
-        da_version: "3.2.2",
+        da_version: DRAFT_VERSION,
         web_component_open_flag: 1,
-        web_version: "3.2.2",
+        web_version: DRAFT_VERSION,
       },
-      data: {
-        extend: {
-          root_model: model,
-          template_id: "",
-        },
-        submit_id: util.uuid(),
-        metrics_extra: hasFilePath
-          ? undefined
-          : JSON.stringify(
-              is4xModel
-                ? {
-                    promptSource: "custom",
-                    generateCount: 1,
-                    enterFrom: "click",
-                    sceneOptions: JSON.stringify([
-                      {
-                        type: "image",
-                        scene: "ImageBasicGenerate",
-                        modelReqKey: model,
-                        resolutionType: resolutionType,
-                        abilityList: [],
-                        benefitCount: resolutionType === "2k" ? 4 : 1,
-                        reportParams: {
-                          enterSource: "generate",
-                          vipSource: "generate",
-                          extraVipFunctionKey: `${model}-${resolutionType}`,
-                          useVipFunctionDetailsReporterHoc: true,
-                        },
-                      },
-                    ]),
-                    isBoxSelect: false,
-                    isCutout: false,
-                    generateId: util.uuid(),
-                    isRegenerate: false,
-                  }
-                : {
-                    templateId: "",
-                    generateCount: 1,
-                    promptSource: "custom",
-                    templateSource: "",
-                    lastRequestId: "",
-                    originRequestId: "",
-                  }
-            ),
-        draft_content: JSON.stringify({
-          type: "draft",
-          id: util.uuid(),
-          min_version: DRAFT_VERSION,
-          is_from_tsn: true,
-          version: "3.2.2",
-          main_component_id: componentId,
-          component_list: [
-            {
-              type: "image_base_component",
-              id: componentId,
-              min_version: DRAFT_VERSION,
-              metadata: {
-                type: "",
-                id: util.uuid(),
-                created_platform: 3,
-                created_platform_version: "",
-                created_time_in_ms: Date.now(),
-                created_did: "",
-              },
-              generate_type: hasFilePath ? "blend" : "generate",
-              aigc_mode: "workbench",
-              abilities,
-            },
-          ],
-        }),
-        http_common_info: {
-          aid: Number(DEFAULT_ASSISTANT_ID),
-        },
-      },
+      data: requestData,
     }
   );
   const historyId = aigc_data.history_record_id;
@@ -530,11 +538,10 @@ export async function generateImages(
     status = result[historyId].status;
     failCode = result[historyId].fail_code;
     item_list = result[historyId].item_list;
-    logger.info(
-      `轮询状态: status=${status}, item_list长度=${
-        item_list?.length || 0
-      }, 第${retryCount}次`
-    );
+    // 每5次轮询输出一次状态，避免日志过多
+    if (retryCount % 5 === 0 || item_list?.length > 0) {
+      logger.info(`⏳ [轮询] 第${retryCount}次 | 状态码: ${status} | 结果数: ${item_list?.length || 0}`);
+    }
   }
 
   if (retryCount >= MAX_POLL_RETRIES) {

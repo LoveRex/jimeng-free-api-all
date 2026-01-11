@@ -1,42 +1,45 @@
-FROM node:lts-alpine AS BUILD_IMAGE
+# 构建阶段
+FROM node:20-alpine AS builder
 
 # 安装编译 better-sqlite3 所需的工具
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-COPY package*.json yarn.lock ./
+# 只复制依赖文件，利用 Docker 缓存
+COPY package.json yarn.lock ./
 
-# 安装依赖用于构建
-RUN yarn install --registry https://registry.npmmirror.com/ --ignore-engines
+# 安装所有依赖（包括 devDependencies 用于构建）
+RUN yarn install --frozen-lockfile --registry https://registry.npmmirror.com/ --ignore-engines
 
+# 复制源代码并构建
 COPY . .
-
 RUN yarn run build
 
-# 最终镜像使用 alpine
-FROM node:lts-alpine
+# 清理开发依赖，只保留生产依赖
+RUN rm -rf node_modules && \
+    yarn install --production --frozen-lockfile --registry https://registry.npmmirror.com/ --ignore-engines
+
+# 最终运行镜像 - 使用更小的基础镜像
+FROM node:20-alpine
+
+# 安装运行时必需的库（better-sqlite3 需要）
+RUN apk add --no-cache libstdc++
 
 WORKDIR /app
 
-# 复制构建产物和配置
-COPY --from=BUILD_IMAGE /app/configs /app/configs
-COPY --from=BUILD_IMAGE /app/package.json /app/package.json
-COPY --from=BUILD_IMAGE /app/yarn.lock /app/yarn.lock
-COPY --from=BUILD_IMAGE /app/dist /app/dist
-COPY --from=BUILD_IMAGE /app/public /app/public
-
-# 安装编译工具、编译 better-sqlite3、然后删除编译工具（一个 RUN 命令减少层数）
-RUN apk add --no-cache --virtual .build-deps python3 make g++ \
-    && yarn install --production --registry https://registry.npmmirror.com/ --ignore-engines \
-    && apk del .build-deps \
-    && rm -rf /var/cache/apk/* \
-    && rm -rf /root/.npm /root/.node-gyp /tmp/*
+# 只复制必要的文件
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/configs ./configs
+COPY --from=builder /app/public ./public
 
 # 创建数据目录
 RUN mkdir -p /app/data
 
-# 数据库路径环境变量
+# 环境变量
+ENV NODE_ENV=production
 ENV DB_PATH=/app/data/jimeng.db
 
 # 持久化数据卷
