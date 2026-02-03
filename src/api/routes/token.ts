@@ -24,7 +24,8 @@ export default {
             request
                 .validate('headers.authorization', _.isString)
             // refresh_token切分
-            const tokens = tokenSplit(request.headers.authorization);
+            const useLocal = request.headers['use-local'] === '1';
+            const tokens = tokenSplit(request.headers.authorization, useLocal);
             const points = await Promise.all(tokens.map(async (token) => {
                 return {
                     token,

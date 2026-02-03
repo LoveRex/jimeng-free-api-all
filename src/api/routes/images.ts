@@ -21,7 +21,8 @@ export default {
         .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
         .validate("body.filePath", v => _.isUndefined(v) || _.isString(v));
       // refresh_token切分
-      const tokens = tokenSplit(request.headers.authorization);
+      const useLocal = request.headers['use-local'] === '1';
+      const tokens = tokenSplit(request.headers.authorization, useLocal);
       // 随机挑选一个refresh_token
       const token = _.sample(tokens);
       const {

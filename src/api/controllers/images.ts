@@ -420,14 +420,14 @@ export async function generateImages(
     failCode,
     item_list = [];
   let retryCount = 0;
-  const MAX_POLL_RETRIES = 120; // 最多轮询120次
+  const MAX_POLL_RETRIES = 60; // 最多轮询60次
 
   while (
     PROCESSING_STATES.includes(status) &&
     (!item_list || item_list.length === 0) &&
     retryCount < MAX_POLL_RETRIES
   ) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     retryCount++;
     const result = await request(
       "post",
@@ -538,8 +538,8 @@ export async function generateImages(
     status = result[historyId].status;
     failCode = result[historyId].fail_code;
     item_list = result[historyId].item_list;
-    // 每5次轮询输出一次状态，避免日志过多
-    if (retryCount % 5 === 0 || item_list?.length > 0) {
+    // 每10次轮询输出一次状态，避免日志过多
+    if (retryCount % 10 === 0 || item_list?.length > 0) {
       logger.info(`⏳ [轮询] 第${retryCount}次 | 状态码: ${status} | 结果数: ${item_list?.length || 0}`);
     }
   }

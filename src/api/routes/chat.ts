@@ -4,6 +4,7 @@ import Request from '@/lib/request/Request.ts';
 import Response from '@/lib/response/Response.ts';
 import { tokenSplit } from '@/api/controllers/core.ts';
 import { createCompletion, createCompletionStream } from '@/api/controllers/chat.ts';
+import logger from '@/lib/logger.ts';
 
 export default {
 
@@ -16,7 +17,8 @@ export default {
                 .validate('body.model', v => _.isUndefined(v) || _.isString(v))
                 .validate('body.messages', _.isArray)
             // refresh_token切分
-            const tokens = tokenSplit(request.headers.authorization);
+            const useLocal = request.headers['use-local'] === '1';
+            const tokens = tokenSplit(request.headers.authorization, useLocal);
             // 随机挑选一个refresh_token
             const token = _.sample(tokens);
             const { model, messages, stream } = request.body;

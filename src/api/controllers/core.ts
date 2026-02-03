@@ -9,6 +9,7 @@ import EX from "@/api/consts/exceptions.ts";
 import { createParser } from "eventsource-parser";
 import logger from "@/lib/logger.ts";
 import util from "@/lib/util.ts";
+import config from "@/lib/config.ts";
 
 // 模型名称
 const MODEL_NAME = "jimeng";
@@ -545,18 +546,21 @@ export function checkResult(result: AxiosResponse) {
   throw new APIException(EX.API_REQUEST_FAILED, `[请求失败]: ${errmsg} (错误码: ${ret})`);
 }
 
-import config from "@/lib/config.ts";
-
 /**
  * 获取认证Token
  *
  * @param authorization 认证字符串
  */
-export function tokenSplit(authorization: string) {
-  const token = authorization?.replace("Bearer ", "") || "";
-  if (token.length > 0) return token.split(",");
-  if (config.service.token) return config.service.token.split(",");
-  return [];
+export function tokenSplit(authorization?: string, useLocal: boolean = false) {
+  if (useLocal) {
+    const raw = config.service.token || "";
+    if (!raw) return [];
+    return raw.split(",").map(item => item.trim()).filter(Boolean);
+  }
+  const token = authorization?.replace("Bearer ", "").trim() || "";
+  const raw = token.length > 0 ? token : (config.service.token || "");
+  if (!raw) return [];
+  return raw.split(",").map(item => item.trim()).filter(Boolean);
 }
 
 /**
