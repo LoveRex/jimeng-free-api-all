@@ -15,7 +15,6 @@ export default {
             request
                 .validate('body.model', v => _.isUndefined(v) || _.isString(v))
                 .validate('body.messages', _.isArray)
-                .validate('headers.authorization', _.isString)
             // refresh_token切分
             const tokens = tokenSplit(request.headers.authorization);
             // 随机挑选一个refresh_token

@@ -545,13 +545,18 @@ export function checkResult(result: AxiosResponse) {
   throw new APIException(EX.API_REQUEST_FAILED, `[请求失败]: ${errmsg} (错误码: ${ret})`);
 }
 
+import config from "@/lib/config.ts";
+
 /**
- * Token切分
+ * 获取认证Token
  *
  * @param authorization 认证字符串
  */
 export function tokenSplit(authorization: string) {
-  return authorization.replace("Bearer ", "").split(",");
+  const token = authorization?.replace("Bearer ", "") || "";
+  if (token.length > 0) return token.split(",");
+  if (config.service.token) return config.service.token.split(",");
+  return [];
 }
 
 /**

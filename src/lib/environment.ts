@@ -3,6 +3,9 @@ import path from 'path';
 import fs from 'fs-extra';
 import minimist from 'minimist';
 import _ from 'lodash';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const cmdArgs = minimist(process.argv.slice(2));  //获取命令行参数
 const envVars = process.env;  //获取环境变量
@@ -21,6 +24,8 @@ class Environment {
     host?: string;
     /** 服务端口 */
     port?: number;
+    /** 即梦 Token */
+    token?: string;
     /** 包参数 */
     package: any;
 
@@ -32,6 +37,7 @@ class Environment {
         this.name = cmdArgs.name || envVars.SERVER_NAME || undefined;
         this.host = cmdArgs.host || envVars.SERVER_HOST || undefined;
         this.port = Number(cmdArgs.port || envVars.SERVER_PORT) ? Number(cmdArgs.port || envVars.SERVER_PORT) : undefined;
+        this.token = cmdArgs.token || envVars.TOKEN || undefined;
         this.package = _package;
     }
 

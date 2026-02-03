@@ -19,8 +19,7 @@ export default {
         .validate("body.resolution", v => _.isUndefined(v) || _.isString(v))
         .validate("body.sample_strength", v => _.isUndefined(v) || _.isFinite(v))
         .validate("body.response_format", v => _.isUndefined(v) || _.isString(v))
-        .validate("body.filePath", v => _.isUndefined(v) || _.isString(v))
-        .validate("headers.authorization", _.isString);
+        .validate("body.filePath", v => _.isUndefined(v) || _.isString(v));
       // refresh_token切分
       const tokens = tokenSplit(request.headers.authorization);
       // 随机挑选一个refresh_token

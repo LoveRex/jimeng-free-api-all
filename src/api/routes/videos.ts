@@ -21,8 +21,7 @@ export default {
                 .validate('body.resolution', v => _.isUndefined(v) || _.isString(v))
                 .validate('body.duration', v => _.isUndefined(v) || _.isFinite(v))
                 .validate('body.file_paths', v => _.isUndefined(v) || _.isArray(v))
-                .validate('body.response_format', v => _.isUndefined(v) || _.isString(v))
-                .validate('headers.authorization', _.isString);
+                .validate('body.response_format', v => _.isUndefined(v) || _.isString(v));
 
             // refresh_token切分
             const tokens = tokenSplit(request.headers.authorization);
